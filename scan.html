@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<!-- Font Awesome CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Absensi Digital Siswi Al-Hadiid</title>
+
+<!-- Html5 QR Code Scanner -->
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+/* ==== Bottom Navigation ==== */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #46A6D9;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px 0;
+  z-index: 1000;
+}
+.bottom-nav a {
+  flex: 1;
+  text-align: center;
+  color: #fff;
+  text-decoration: none;
+  font-size: 12px;
+  padding: 6px 0;
+}
+.bottom-nav a i {
+  font-size: 20px;
+  display: block;
+  margin-bottom: 3px;
+}
+.bottom-nav a.active {
+  background-color: #2f3e9e;
+  border-radius: 6px;
+}
+
+body { 
+  font-family:'Segoe UI',sans-serif;
+  margin:0;
+  padding:0;
+  background:#f5f6fa; 
+  padding-bottom: 70px;
+  overflow-y: auto;
+}
+header { text-align:center;padding:30px 20px 10px; }
+header h1 { color:#2f3e9e;margin-bottom:10px; }
+header p { color:#555; }
+.container { display:flex;flex-wrap:wrap;gap:20px;justify-content:center;padding:20px; }
+.card { background:white;border-radius:10px;padding:20px;box-shadow:0 0 10px rgba(0,0,0,0.1);flex:1;min-width:320px;max-width:500px; }
+.card h3 { margin-top:0;color:#2f3e9e; }
+.label { font-weight:bold;margin-top:10px;color:#2f3e9e; }
+.value { background:#f2f2f2;padding:8px 12px;border-radius:6px;margin-bottom:10px; }
+.badge { display:inline-block;padding:5px 10px;border-radius:20px;font-size:13px;color:white; }
+.btn { padding:10px 20px;border:none;color:white;font-weight:bold;border-radius:5px;cursor:pointer;margin-right:10px;font-size:14px; }
+.btn-primary { background:#2f3e9e; }
+.btn-danger { background:#e74c3c; }
+
+/* ===== SCANNER CONTAINER ===== */
+#reader {
+  width: 100%;
+  max-width: 420px;
+  height: 300px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  margin-bottom: 15px;
+}
+
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
+/* Loading camera styling */
+#loadingCamera {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.75);
+  padding: 15px 25px;
+  border-radius: 10px;
+  color: white;
+  z-index: 30;
+  font-size: 16px;
+  text-align: center;
+  display: none;
+}
+
+/* Laser line animation */
+.laser-line {
+  position: absolute;
+  top: 0;
+  left: 10%;
+  width: 80%;
+  height: 3px;
+  background: #ff0000;
+  box-shadow: 0 0 10px #ff0000;
+  animation: laserMove 2s linear infinite;
+  z-index: 20;
+  opacity: 0.8;
+  border-radius: 50%;
+}
+
+@keyframes laserMove {
+  0% { top: 10%; }
+  50% { top: 50%; }
+  100% { top: 90%; }
+}
+
+/* Tombol Flash */
+.flash-btn {
+  background: #2f3e9e;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width:768px) {
+  .container { flex-direction:column;padding:10px; }
+  .card { max-width:100%; }
+  #reader { height:250px !important; }
+}
+</style>
+</head>
+<body>
+
+<nav class="bottom-nav">
+  <a href="izin.html"><i class="fa fa-check-square"></i>Izin</a>
+  <a href="scan.html" class="active"><i class="fa fa-qrcode"></i>Scan</a>
+  <a href="recap.html"><i class="fa fa-book"></i>Recap</a>
+</nav>
+
+<header>
+<h1>Absensi Digital Siswi SMA Al Hadiid</h1>
+<p>Scan kartu barcode peserta untuk mencatat kehadiran</p>
+</header>
+
+<div class="container">
+
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h3 style="margin: 0;">Scan Barcode Anda Disini</h3>
+    <button id="flashBtn" class="flash-btn">
+      <i class="fa-solid fa-bolt"></i> Flash
+    </button>
+  </div>
+
+  <hr />
+
+  <div id="reader">
+      <div id="loadingCamera">📷 Mengaktifkan Kamera...</div>
+      <div class="laser-line"></div>
+  </div>
+</div>
+
+<div class="card">
+<h3>Data Peserta</h3>
+<hr />
+
+<div class="label">Status:</div>
+<div class="value"><span class="badge" id="status" style="background-color: orange;">Menunggu scan</span></div>
+
+<div class="label">Nama:</div>
+<div class="value" id="nama">-</div>
+
+<div class="label">Kelas:</div>
+<div class="value" id="kelas">-</div>
+
+<div class="label">Nomor Absen:</div>
+<div class="value" id="absen">-</div>
+
+<div class="label">Keterangan:</div>
+<div class="value" id="keterangan">-</div>
+
+<div class="label">Waktu Absensi:</div>
+<div class="value" id="waktu">-</div>
+
+<div class="label">Jarak ke Sekolah:</div>
+<div class="value" id="jarakSekolah">Menghitung...</div>
+
+<div style="margin-top:20px;">
+<button class="btn btn-primary" onclick="simpanPresensi()">Simpan Presensi</button>
+<button class="btn btn-danger" onclick="resetData()">Reset</button>
+</div>
+</div>
+
+</div>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyBr4DNrjgpg1z_VVuP_uBJEs4iy0zkLOig",
+  authDomain: "absensi-digital-199d2.firebaseapp.com",
+  databaseURL: "https://absensi-digital-199d2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "absensi-digital-199d2",
+  storageBucket: "absensi-digital-199d2.appspot.com",
+  messagingSenderId: "387823714427",
+  appId: "1:387823714427:web:6938dd60c1fcf1a87662de"
+};
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+// Scanner
+const scanner = new Html5Qrcode("reader");
+const audioSuccess = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+
+// GPS
+const schoolLat = -6.408638;
+const schoolLng = 106.963852;
+const radiusM = 1000;
+
+let semuaPresensi = {};
+let keteranganScan = null;
+let scanDataGPS = null;
+let currentStream = null;
+
+/* ---- Tambahan: Auto reset timeout ---- */
+let resetTimeout = null;
+
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Start Scanner
+function startScanner() {
+  document.getElementById("loadingCamera").style.display = "block";
+
+  const config = {
+    fps: 10,
+    qrbox: { width: 250, height: 250 }
+  };
+
+  scanner.start(
+    { facingMode: "environment" },
+    config,
+    decodedText => {
+
+      /* Kalau dapat barcode → hentikan reset */
+      clearTimeout(resetTimeout);
+
+      scanner.pause();
+      audioSuccess.play();
+      navigator.vibrate?.(120);
+
+      navigator.geolocation.getCurrentPosition(
+        pos => prosesDataGPS(decodedText, pos.coords.latitude, pos.coords.longitude),
+        err => {
+          audioError.play();
+          alert("Tidak bisa mendapatkan lokasi GPS!");
+          restartScanner();
+        }
+      );
+    },
+
+    /* ---- AUTO RESET BARU ---- */
+    err => {
+      clearTimeout(resetTimeout);
+
+      resetTimeout = setTimeout(() => {
+        resetData();
+      }, 10000); // 1 detik tidak ada deteksi → reset otomatis
+    }
+
+  ).then(() => {
+    document.getElementById("loadingCamera").style.display = "none";
+
+    try {
+      const vid = document.querySelector('#reader video');
+      if (vid && vid.srcObject) currentStream = vid.srcObject;
+    } catch(e) { console.log('ambil stream gagal', e); }
+
+  }).catch(err => {
+    document.getElementById("loadingCamera").style.display = "none";
+    console.error('gagal start scanner', err);
+    alert('Gagal mengakses kamera: ' + (err.message || err.name));
+  });
+}
+
+function restartScanner() {
+  setTimeout(() => {
+    try { scanner.resume(); } catch(e) { console.warn(e); }
+    document.getElementById("status").textContent = "Menunggu scan";
+    document.getElementById("status").style.backgroundColor = "orange";
+  }, 1000);
+}
+
+function prosesDataGPS(data, lat, lng) {
+  const now = new Date();
+  const jamSekarang = now.getHours();
+  const jamAkhirAbsensi = 7;
+
+  let nama = "-", kelas = "-", absen = "-";
+
+  try {
+    const obj = JSON.parse(data);
+    nama = obj.nama || "-"; 
+    kelas = obj.kelas || "-"; 
+    absen = obj.absen || "-"; 
+  } catch(e) {
+    audioError.play();
+    nama = data;
+  }
+
+  const jarak = getDistance(schoolLat, schoolLng, lat, lng);
+  document.getElementById("jarakSekolah").textContent = `${Math.round(jarak)} meter`;
+
+  if(jarak > radiusM) {
+    document.getElementById("status").textContent = "Di luar area sekolah!";
+    document.getElementById("status").style.backgroundColor = "#e74c3e";
+    restartScanner();
+    return;
+  }
+
+  document.getElementById("status").textContent = "Berhasil scan";
+  document.getElementById("status").style.backgroundColor = "#27ae60";
+  document.getElementById("nama").textContent = nama;
+  document.getElementById("kelas").textContent = kelas;
+  document.getElementById("absen").textContent = absen;
+
+  let keterangan = "Hadir";
+  let warna = "#27ae60";
+  if(jamSekarang > jamAkhirAbsensi) { 
+    keterangan = "Telat"; 
+    warna = "#e74c3c"; 
+  }
+  
+  document.getElementById("keterangan").innerHTML = `<span class="badge" style="background-color:${warna};">${keterangan}</span>`;
+  document.getElementById("waktu").textContent = now.toLocaleString();
+  
+  keteranganScan = keterangan;
+  scanDataGPS = { lat, lng };
+}
+
+function resetData() {
+  document.getElementById("status").textContent = "Menunggu scan";
+  document.getElementById("status").style.backgroundColor = "orange";
+  document.getElementById("nama").textContent = "-";
+  document.getElementById("kelas").textContent = "-";
+  document.getElementById("absen").textContent = "-";
+  document.getElementById("keterangan").textContent = "-";
+  document.getElementById("waktu").textContent = "-";
+  document.getElementById("jarakSekolah").textContent = "Menghitung...";
+  
+  keteranganScan = null;
+  scanDataGPS = null;
+
+  /* Reset juga timeout supaya tidak dobel */
+  clearTimeout(resetTimeout);
+  
+  if (scanner && typeof scanner.resume === 'function') {
+    try { scanner.resume(); } catch(e){ console.warn(e); }
+  }
+}
+
+function simpanPresensi() {
+  const nama = document.getElementById("nama").textContent;
+  const kelas = document.getElementById("kelas").textContent;
+  const absen = document.getElementById("absen").textContent;
+  const keterangan = keteranganScan || "-";
+  const gps = scanDataGPS || { lat: null, lng: null };
+
+  if(nama === "-" || kelas === "-" || absen === "-") { 
+    audioError.play();
+    alert("Data peserta belum lengkap!"); 
+    return; 
+  }
+
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  
+  const sudahAbsen = Object.values(semuaPresensi).some(item => {
+    if (!item) return false;
+    return item.nama === nama && item.kelas === kelas && item.absen === absen && item.waktu && item.waktu.startsWith(today);
+  });
+  
+  if(sudahAbsen) { 
+    audioError.play();
+    alert("Anda sudah absen hari ini!"); 
+    return; 
+  }
+
+  const newKey = database.ref().child('presensi').push().key;
+  database.ref('presensi/' + newKey).set({
+    nama, kelas, absen, keterangan, 
+    waktu: now.toISOString(), 
+    lat: gps.lat, 
+    lng: gps.lng
+  }).then(() => { 
+    audioSuccess.play();
+    alert("Absensi Berhasil Tersimpan!"); 
+    resetData(); 
+  }).catch(err => {
+    audioError.play();
+    alert("Gagal simpan data: " + err.message); 
+  });
+}
+
+function tampilkanDataPresensi(data) {
+  semuaPresensi = data || {};
+}
+
+// Flash function
+async function toggleFlash() {
+  if (!currentStream) {
+    alert('Flash tidak tersedia (stream belum didapat).');
+    return;
+  }
+  try {
+    const track = currentStream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.torch) { alert('Device tidak mendukung torch'); return; }
+    const constraints = { advanced: [{ torch: true }] };
+    await track.applyConstraints(constraints);
+  } catch(e) { console.warn('toggle flash error', e); alert('Gagal toggle flash: '+e.message); }
+}
+
+// Firebase listener
+database.ref('presensi').on('value', snapshot => { tampilkanDataPresensi(snapshot.val()); });
+
+document.getElementById('flashBtn').addEventListener('click', toggleFlash);
+
+// Start scanner on load
+window.onload = () => { startScanner(); };
+</script>
+
+</body>
+</html>
